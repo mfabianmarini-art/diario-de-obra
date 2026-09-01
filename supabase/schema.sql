@@ -3,13 +3,39 @@
 --  Cole este arquivo inteiro no SQL Editor do Supabase e execute.
 -- =====================================================================
 
+-- e-mail do gestor padrão: entra como gestor em toda obra nova e não pode
+-- ser removido nem rebaixado pela equipe.
+create or replace function public.email_admin()
+returns text
+language sql
+immutable
+as $$
+  select 'matheus.marini@cape.eng.br';
+$$;
+
+create or replace function public.eh_admin(p_user uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public, auth
+as $$
+  select exists (
+    select 1 from auth.users u
+    where u.id = p_user and lower(u.email) = lower(public.email_admin())
+  );
+$$;
+
 -- ---------- perfis -------------------------------------------------
 create table if not exists public.perfis (
   id          uuid primary key references auth.users (id) on delete cascade,
   nome        text not null default '',
   crea        text,
+  admin       boolean not null default false,
   criado_em   timestamptz not null default now()
 );
+
+alter table public.perfis add column if not exists admin boolean not null default false;
 
 -- cria o perfil automaticamente quando um usuário é criado
 create or replace function public.cria_perfil()
@@ -18,9 +44,13 @@ language plpgsql
 security definer set search_path = public
 as $$
 begin
-  insert into public.perfis (id, nome)
-  values (new.id, coalesce(new.raw_user_meta_data->>'nome', split_part(new.email, '@', 1)))
-  on conflict (id) do nothing;
+  insert into public.perfis (id, nome, admin)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'nome', split_part(new.email, '@', 1)),
+    lower(new.email) = lower(public.email_admin())
+  )
+  on conflict (id) do update set admin = excluded.admin;
   return new;
 end;
 $$;
@@ -177,7 +207,10 @@ create policy membros_insere on public.obra_membros
 
 drop policy if exists membros_apaga on public.obra_membros;
 create policy membros_apaga on public.obra_membros
-  for delete using (public.gerencia_a_obra(obra_id) or user_id = auth.uid());
+  for delete using (
+    not public.eh_admin(user_id)
+    and (public.gerencia_a_obra(obra_id) or user_id = auth.uid())
+  );
 
 -- ---------- diários ----------
 drop policy if exists diarios_leitura on public.diarios;
@@ -200,15 +233,16 @@ create policy diarios_apaga on public.diarios
 --  Funções de aplicação
 -- =====================================================================
 
--- Cria a obra e já matricula quem criou como gestor, em uma transação só.
+-- Cria a obra e já matricula quem criou e o gestor padrão, em uma transação só.
 create or replace function public.criar_obra(p_nome text)
 returns uuid
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, auth
 as $$
 declare
   v_id uuid;
+  v_admin uuid;
 begin
   if auth.uid() is null then
     raise exception 'sem sessão';
@@ -220,6 +254,13 @@ begin
 
   insert into public.obra_membros (obra_id, user_id, papel)
   values (v_id, auth.uid(), 'gestor');
+
+  select id into v_admin from auth.users where lower(email) = lower(public.email_admin());
+  if v_admin is not null and v_admin <> auth.uid() then
+    insert into public.obra_membros (obra_id, user_id, papel)
+    values (v_id, v_admin, 'gestor')
+    on conflict (obra_id, user_id) do update set papel = 'gestor';
+  end if;
 
   return v_id;
 end;
@@ -253,7 +294,46 @@ begin
 end;
 $$;
 
+-- Altera o papel de quem já está na equipe da obra (sem remover e readicionar).
+create or replace function public.alterar_papel_membro(p_obra uuid, p_user uuid, p_papel text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.gerencia_a_obra(p_obra) then
+    raise exception 'somente o gestor da obra pode alterar papéis';
+  end if;
+
+  if public.eh_admin(p_user) then
+    raise exception 'o gestor padrão não pode ter o papel alterado';
+  end if;
+
+  update public.obra_membros
+    set papel = case when p_papel = 'gestor' then 'gestor' else 'campo' end
+    where obra_id = p_obra and user_id = p_user;
+end;
+$$;
+
 revoke all on function public.criar_obra(text) from public;
 revoke all on function public.adicionar_membro(uuid, text, text) from public;
+revoke all on function public.alterar_papel_membro(uuid, uuid, text) from public;
 grant execute on function public.criar_obra(text) to authenticated;
 grant execute on function public.adicionar_membro(uuid, text, text) to authenticated;
+grant execute on function public.alterar_papel_membro(uuid, uuid, text) to authenticated;
+
+-- =====================================================================
+--  Migração: garante o gestor padrão em contas e obras já existentes
+-- =====================================================================
+update public.perfis p
+set admin = true
+from auth.users u
+where p.id = u.id and lower(u.email) = lower(public.email_admin());
+
+insert into public.obra_membros (obra_id, user_id, papel)
+select o.id, u.id, 'gestor'
+from public.obras o
+cross join auth.users u
+where lower(u.email) = lower(public.email_admin())
+on conflict (obra_id, user_id) do update set papel = 'gestor';

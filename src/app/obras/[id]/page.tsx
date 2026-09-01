@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import TopBar from "@/components/TopBar";
 import { clienteServidor, usuarioAtual } from "@/lib/supabase/server";
 import { amanha } from "@/lib/tipos";
-import { adicionarMembro, excluirObra, removerMembro, salvarObra } from "../actions";
+import { adicionarMembro, alterarPapel, excluirObra, removerMembro, salvarObra } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +11,9 @@ const AVISOS: Record<string, string> = {
   nao_encontrado:
     "Ninguém com esse e-mail tem conta ainda. Peça para a pessoa criar a conta e tente de novo.",
   erro: "Não foi possível adicionar — só o gestor da obra pode fazer isso.",
+  erro_remover: "Não foi possível remover — só o gestor da obra pode fazer isso.",
+  erro_papel: "Não foi possível alterar o papel dessa pessoa.",
+  papel_ok: "Papel atualizado.",
 };
 
 const AVISOS_OBRA: Record<string, string> = {
@@ -36,7 +39,7 @@ export default async function PaginaObra({
 
   const { data: membros } = await supabase
     .from("obra_membros")
-    .select("user_id, papel, perfis:user_id (nome)")
+    .select("user_id, papel, perfis:user_id (nome, admin)")
     .eq("obra_id", id);
 
   const souGestor = membros?.some((m) => m.user_id === usuario?.id && m.papel === "gestor");
@@ -103,7 +106,9 @@ export default async function PaginaObra({
           <div className="blk-b">
             <div className="rows">
               {membros?.map((m) => {
-                const perfil = m.perfis as unknown as { nome?: string } | null;
+                const perfil = m.perfis as unknown as { nome?: string; admin?: boolean } | null;
+                const ehGestorPadrao = !!perfil?.admin;
+                const podeGerenciar = souGestor && m.user_id !== usuario?.id && !ehGestorPadrao;
                 return (
                   <div className="row" key={m.user_id} style={{ cursor: "default" }}>
                     <span className="rdate">
@@ -114,16 +119,30 @@ export default async function PaginaObra({
                       <b>{perfil?.nome || "Sem nome"}</b>
                       <span className="rmeta">
                         <span>{m.user_id === usuario?.id ? "você" : "equipe"}</span>
+                        {ehGestorPadrao ? <span>gestor padrão</span> : null}
                       </span>
                     </span>
-                    {souGestor && m.user_id !== usuario?.id ? (
-                      <form action={removerMembro}>
-                        <input type="hidden" name="obra_id" value={obra.id} />
-                        <input type="hidden" name="user_id" value={m.user_id} />
-                        <button className="btn sm danger" type="submit">
-                          Remover
-                        </button>
-                      </form>
+                    {podeGerenciar ? (
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                        <form action={alterarPapel} style={{ display: "flex", gap: 6 }}>
+                          <input type="hidden" name="obra_id" value={obra.id} />
+                          <input type="hidden" name="user_id" value={m.user_id} />
+                          <select name="papel" defaultValue={m.papel} className="btn sm">
+                            <option value="campo">Campo</option>
+                            <option value="gestor">Gestor</option>
+                          </select>
+                          <button className="btn sm" type="submit">
+                            Aplicar
+                          </button>
+                        </form>
+                        <form action={removerMembro}>
+                          <input type="hidden" name="obra_id" value={obra.id} />
+                          <input type="hidden" name="user_id" value={m.user_id} />
+                          <button className="btn sm danger" type="submit">
+                            Remover
+                          </button>
+                        </form>
+                      </div>
                     ) : (
                       <span className="chevron" />
                     )}

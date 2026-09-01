@@ -81,7 +81,29 @@ export async function removerMembro(dados: FormData) {
   const obraId = String(dados.get("obra_id") || "");
   const userId = String(dados.get("user_id") || "");
   const supabase = await clienteServidor();
-  await supabase.from("obra_membros").delete().eq("obra_id", obraId).eq("user_id", userId);
+  const { data } = await supabase
+    .from("obra_membros")
+    .delete()
+    .eq("obra_id", obraId)
+    .eq("user_id", userId)
+    .select("user_id")
+    .maybeSingle();
   revalidatePath(`/obras/${obraId}`);
-  redirect(`/obras/${obraId}`);
+  redirect(`/obras/${obraId}${data ? "" : "?membro=erro_remover"}`);
+}
+
+export async function alterarPapel(dados: FormData) {
+  const obraId = String(dados.get("obra_id") || "");
+  const userId = String(dados.get("user_id") || "");
+  const papel = String(dados.get("papel") || "campo");
+
+  const supabase = await clienteServidor();
+  const { error } = await supabase.rpc("alterar_papel_membro", {
+    p_obra: obraId,
+    p_user: userId,
+    p_papel: papel,
+  });
+
+  revalidatePath(`/obras/${obraId}`);
+  redirect(`/obras/${obraId}${error ? "?membro=erro_papel" : "?membro=papel_ok"}`);
 }
