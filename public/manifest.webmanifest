@@ -1,0 +1,13 @@
+{
+  "name": "Diário de Obra — CAPE",
+  "short_name": "Diário CAPE",
+  "description": "Diário de obra simplificado para preenchimento em campo.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#e9ecee",
+  "theme_color": "#b81105",
+  "icons": [
+    { "src": "/icone-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icone-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
