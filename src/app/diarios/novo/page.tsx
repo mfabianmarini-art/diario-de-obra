@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import Link from "next/link";
 import TopBar from "@/components/TopBar";
 import DiarioForm from "@/components/DiarioForm";
@@ -55,6 +56,8 @@ export default async function NovoDiario({
       ];
 
   const inicial: Payload = {
+    id: randomUUID(),
+    novo: true,
     obra_id: obraId,
     data: hoje(),
     folha: proxima,
@@ -63,18 +66,21 @@ export default async function NovoDiario({
     servicos: [{ local: "", desc: "", qtd: "" }],
     materiais: [],
     ocorrencias: "",
-    fotos_qtd: "",
     fotos_assunto: "",
+    fotos: [],
     ass_rt: ultimo?.ass_rt || "",
     ass_enc: ultimo?.ass_enc || "",
     ass_cont: ultimo?.ass_cont || "",
+    ass_rt_img: null,
+    ass_enc_img: null,
+    ass_cont_img: null,
   };
 
   return (
     <>
       <TopBar email={usuario?.email} voltar="/" />
       <div className="wrap">
-        <DiarioForm obras={obras} inicial={inicial} />
+        <DiarioForm obras={obras} inicial={inicial} novo fotosUrls={{}} assinaturasUrls={{}} />
       </div>
     </>
   );

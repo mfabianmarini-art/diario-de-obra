@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { clienteServidor, usuarioAtual } from "@/lib/supabase/server";
 import type { Diario } from "@/lib/tipos";
 
-export type Payload = Omit<Diario, "id" | "autor_id" | "criado_em"> & { id?: string };
+export type Payload = Omit<Diario, "autor_id" | "criado_em"> & { novo?: boolean };
 
 export async function salvarDiario(payload: Payload) {
   const usuario = await usuarioAtual();
@@ -21,16 +21,25 @@ export async function salvarDiario(payload: Payload) {
     servicos: payload.servicos,
     materiais: payload.materiais,
     ocorrencias: payload.ocorrencias,
-    fotos_qtd: payload.fotos_qtd,
     fotos_assunto: payload.fotos_assunto,
+    fotos: payload.fotos,
     ass_rt: payload.ass_rt,
     ass_enc: payload.ass_enc,
     ass_cont: payload.ass_cont,
+    ass_rt_img: payload.ass_rt_img,
+    ass_enc_img: payload.ass_enc_img,
+    ass_cont_img: payload.ass_cont_img,
   };
 
-  if (payload.id) {
-    const { error } = await supabase.from("diarios").update(registro).eq("id", payload.id);
+  if (!payload.novo) {
+    const { data, error } = await supabase
+      .from("diarios")
+      .update(registro)
+      .eq("id", payload.id)
+      .select("id")
+      .maybeSingle();
     if (error) return { erro: traduz(error.message) };
+    if (!data) return { erro: "Não foi possível salvar — você não tem permissão nesta obra." };
     revalidatePath("/");
     revalidatePath(`/diarios/${payload.id}`);
     return { id: payload.id };
@@ -38,7 +47,7 @@ export async function salvarDiario(payload: Payload) {
 
   const { data, error } = await supabase
     .from("diarios")
-    .insert({ ...registro, autor_id: usuario.id })
+    .insert({ id: payload.id, ...registro, autor_id: usuario.id })
     .select("id")
     .single();
 

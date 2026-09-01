@@ -1,17 +1,32 @@
 import {
+  MAX_FOTOS_POR_PAGINA,
   dataBr,
   diaDaSemana,
+  emGrupos,
   praticabilidade,
   totalEfetivo,
   type Diario,
   type Obra,
 } from "@/lib/tipos";
 
-export default function Folha({ diario, obra }: { diario: Diario; obra: Obra }) {
+type AssinaturasUrls = { rt: string | null; enc: string | null; cont: string | null };
+
+export default function Folha({
+  diario,
+  obra,
+  fotosUrls,
+  assinaturasUrls,
+}: {
+  diario: Diario;
+  obra: Obra;
+  fotosUrls: string[];
+  assinaturasUrls: AssinaturasUrls;
+}) {
   const efetivo = (diario.efetivo || []).filter((e) => e.funcao && Number(e.qtd) > 0);
   const linhas = Math.max(2, Math.ceil(efetivo.length / 2));
   const servicos = (diario.servicos || []).filter((s) => s.desc || s.local || s.qtd);
   const materiais = (diario.materiais || []).filter((m) => m.item || m.nf || m.qtd);
+  const paginasFotos = emGrupos(fotosUrls, MAX_FOTOS_POR_PAGINA);
 
   return (
     <div className="sheet">
@@ -151,23 +166,48 @@ export default function Folha({ diario, obra }: { diario: Diario; obra: Obra }) 
         <div className="sh-pre">{diario.ocorrencias || "—"}</div>
       </Bloco>
 
-      <Bloco n="7" titulo="Registro fotográfico" hint="anexo">
-        <div className="sh-g">
-          <Campo r="Nº de fotos anexas" v={diario.fotos_qtd} c="c4" />
-          <Campo r="Assunto das fotos" v={diario.fotos_assunto} c="c8" />
-        </div>
-      </Bloco>
+      <div className="sh-blk-fotos">
+        <Bloco n="7" titulo="Registro fotográfico" hint="anexo">
+          <div className="sh-g" style={{ marginBottom: paginasFotos.length ? 12 : 0 }}>
+            <Campo r="Assunto das fotos" v={diario.fotos_assunto} c="" />
+          </div>
+          {paginasFotos.length ? (
+            paginasFotos.map((pagina, i) => (
+              <div key={i} className={`sh-fotos-pg${i > 0 ? " quebra" : ""}`}>
+                {pagina.map((url, j) => (
+                  <div className="sh-foto" key={j}>
+                    <img src={url} alt="" />
+                  </div>
+                ))}
+              </div>
+            ))
+          ) : (
+            <p className="sh-pre" style={{ minHeight: "auto" }}>
+              Nenhuma foto anexada.
+            </p>
+          )}
+        </Bloco>
+      </div>
 
       <div className="sh-sign">
         <div>
+          <div className="sh-sign-img">
+            {assinaturasUrls.rt ? <img src={assinaturasUrls.rt} alt="" /> : null}
+          </div>
           <b>{diario.ass_rt || " "}</b>
           Responsável técnico — CREA/CAU {obra.crea || ""}
         </div>
         <div>
+          <div className="sh-sign-img">
+            {assinaturasUrls.enc ? <img src={assinaturasUrls.enc} alt="" /> : null}
+          </div>
           <b>{diario.ass_enc || " "}</b>
           Encarregado / preposto
         </div>
         <div>
+          <div className="sh-sign-img">
+            {assinaturasUrls.cont ? <img src={assinaturasUrls.cont} alt="" /> : null}
+          </div>
           <b>{diario.ass_cont || " "}</b>
           Contratante ou fiscal — ciência
         </div>

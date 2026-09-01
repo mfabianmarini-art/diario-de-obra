@@ -17,6 +17,7 @@ export type Clima = { manha: string; tarde: string; horasParadas: string; obs: s
 export type ItemEfetivo = { funcao: string; qtd: number };
 export type ItemServico = { local: string; desc: string; qtd: string };
 export type ItemMaterial = { item: string; nf: string; qtd: string };
+export type ItemFoto = { path: string };
 
 export type Diario = {
   id: string;
@@ -28,14 +29,25 @@ export type Diario = {
   servicos: ItemServico[];
   materiais: ItemMaterial[];
   ocorrencias: string;
-  fotos_qtd: string;
   fotos_assunto: string;
+  fotos: ItemFoto[];
   ass_rt: string;
   ass_enc: string;
   ass_cont: string;
+  ass_rt_img: string | null;
+  ass_enc_img: string | null;
+  ass_cont_img: string | null;
   autor_id: string;
   criado_em: string;
 };
+
+export const MAX_FOTOS_POR_PAGINA = 8;
+
+export function emGrupos<T>(lista: T[], tamanho: number): T[][] {
+  const grupos: T[][] = [];
+  for (let i = 0; i < lista.length; i += tamanho) grupos.push(lista.slice(i, i + tamanho));
+  return grupos;
+}
 
 export const FUNCOES = [
   "Encarregado", "Pedreiro", "Servente", "Carpinteiro", "Armador",

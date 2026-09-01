@@ -152,6 +152,21 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); outline
 .total { font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); border-top: 1px solid var(--rule); margin-top: 12px; padding-top: 11px; display: flex; justify-content: space-between; }
 .total b { color: var(--accent-ink); font-size: 16px; }
 
+.fotos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; margin-bottom: 11px; }
+.foto-item { position: relative; aspect-ratio: 4 / 3; border: 1px solid var(--rule); background: var(--field); overflow: hidden; }
+.foto-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.foto-item .foto-carregando { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(18, 23, 26, 0.45); color: #fff; font-family: var(--mono); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.05em; }
+.foto-item .foto-rmv { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; border: 0; border-radius: 50%; background: rgba(18, 23, 26, 0.65); color: #fff; font-size: 14px; line-height: 1; }
+.foto-item .foto-rmv:hover { background: var(--accent); }
+.foto-pickers { display: flex; gap: 10px; flex-wrap: wrap; }
+.foto-pickers label.btn { cursor: pointer; }
+.foto-pickers input[type="file"] { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; }
+
+.sigpad { display: block; width: 100%; height: 150px; touch-action: none; background: var(--paper); border: 1px dashed var(--rule-2); border-radius: 4px; }
+.sig-bar { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.sig-bar input { flex: 1; width: auto; min-height: 38px; }
+.sig-bar .rmv { flex: none; }
+
 .savebar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--ground); border-top: 1px solid var(--rule-2); padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); }
 .savebar-in { max-width: 980px; margin: 0 auto; display: flex; gap: 10px; align-items: center; }
 .msg { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.05em; color: var(--ink-3); text-transform: uppercase; }
@@ -182,8 +197,14 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); outline
 .sh-t th { font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); font-weight: 500; text-align: left; padding: 5px 7px; border: 1px solid var(--rule); background: var(--field); }
 .sh-t td { border: 1px solid var(--rule); padding: 5px 7px; }
 .sh-sign { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; padding: 30px 13px 14px; }
-.sh-sign div { border-top: 1px solid var(--rule-3); padding-top: 5px; text-align: center; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-3); }
-.sh-sign div b { display: block; color: var(--ink-2); font-weight: 500; font-size: 11px; margin-bottom: 2px; }
+.sh-sign div { padding-top: 5px; text-align: center; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-3); }
+.sh-sign div b { display: block; color: var(--ink-2); font-weight: 500; font-size: 11px; margin-top: 2px; }
+.sh-sign .sh-sign-img { height: 56px; display: flex; align-items: flex-end; justify-content: center; border-bottom: 1px solid var(--rule-3); }
+.sh-sign .sh-sign-img img { max-height: 52px; max-width: 100%; object-fit: contain; }
+
+.sh-fotos-pg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
+.sh-fotos-pg .sh-foto { aspect-ratio: 4 / 3; border: 1px solid var(--rule); overflow: hidden; background: var(--field); }
+.sh-fotos-pg .sh-foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .tscroll { overflow-x: auto; }
 .pgactions { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 16px; }
 
@@ -221,4 +242,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); outline
   .top, .savebar, .pgactions, .noprint { display: none !important; }
   .wrap { padding: 0; max-width: none; }
   .sheet { box-shadow: none; border: 1px solid #000; }
+
+  .sh-blk-fotos { break-before: page; page-break-before: always; }
+  .sh-fotos-pg { break-inside: avoid; page-break-inside: avoid; }
+  .sh-fotos-pg.quebra { break-before: page; page-break-before: always; }
+  .sh-fotos-pg .sh-foto { break-inside: avoid; page-break-inside: avoid; }
 }

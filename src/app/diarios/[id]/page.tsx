@@ -24,6 +24,28 @@ export default async function PaginaFolha({ params }: { params: Promise<{ id: st
 
   const { obras, ...diario } = data as Diario & { obras: Obra };
 
+  const assinar = (path: string | null) =>
+    path
+      ? supabase.storage
+          .from("diario-anexos")
+          .createSignedUrl(path, 60 * 60 * 24)
+          .then((r) => r.data?.signedUrl || null)
+      : Promise.resolve(null);
+
+  const [fotosUrls, ass_rt, ass_enc, ass_cont] = await Promise.all([
+    Promise.all(
+      (diario.fotos || []).map((f) =>
+        supabase.storage
+          .from("diario-anexos")
+          .createSignedUrl(f.path, 60 * 60 * 24)
+          .then((r) => r.data?.signedUrl)
+      )
+    ),
+    assinar(diario.ass_rt_img),
+    assinar(diario.ass_enc_img),
+    assinar(diario.ass_cont_img),
+  ]);
+
   return (
     <>
       <TopBar email={usuario?.email} voltar="/" />
@@ -44,7 +66,12 @@ export default async function PaginaFolha({ params }: { params: Promise<{ id: st
           </form>
         </div>
 
-        <Folha diario={diario as Diario} obra={obras} />
+        <Folha
+          diario={diario as Diario}
+          obra={obras}
+          fotosUrls={fotosUrls.filter((u): u is string => !!u)}
+          assinaturasUrls={{ rt: ass_rt, enc: ass_enc, cont: ass_cont }}
+        />
       </div>
     </>
   );

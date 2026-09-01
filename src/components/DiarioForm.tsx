@@ -1,8 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { salvarDiario, type Payload } from "@/app/diarios/actions";
+import { clienteNavegador } from "@/lib/supabase/client";
+import AssinaturaPad, { type AssinaturaPadHandle } from "@/components/AssinaturaPad";
 import {
   CLIMA_OPCOES,
   FUNCOES,
@@ -15,17 +17,33 @@ import {
   type ItemServico,
 } from "@/lib/tipos";
 
+type FotoUI = { tempId: string; path: string; url: string; enviando: boolean; erro?: boolean };
+
 type Props = {
   obras: { id: string; nome: string }[];
   inicial: Payload;
-  idExistente?: string;
+  novo?: boolean;
+  fotosUrls: Record<string, string>;
+  assinaturasUrls: { rt?: string | null; enc?: string | null; cont?: string | null };
 };
 
-export default function DiarioForm({ obras, inicial, idExistente }: Props) {
+export default function DiarioForm({ obras, inicial, novo, fotosUrls, assinaturasUrls }: Props) {
   const router = useRouter();
   const [d, setD] = useState<Payload>(inicial);
+  const [fotos, setFotos] = useState<FotoUI[]>(
+    inicial.fotos.map((f) => ({
+      tempId: f.path,
+      path: f.path,
+      url: fotosUrls[f.path] || "",
+      enviando: false,
+    }))
+  );
   const [erro, setErro] = useState<string | null>(null);
   const [pendente, iniciar] = useTransition();
+
+  const padRT = useRef<AssinaturaPadHandle>(null);
+  const padEnc = useRef<AssinaturaPadHandle>(null);
+  const padCont = useRef<AssinaturaPadHandle>(null);
 
   const set = <K extends keyof Payload>(campo: K, valor: Payload[K]) =>
     setD((v) => ({ ...v, [campo]: valor }));
@@ -33,10 +51,81 @@ export default function DiarioForm({ obras, inicial, idExistente }: Props) {
   const setClima = (campo: keyof Clima, valor: string) =>
     setD((v) => ({ ...v, clima: { ...v.clima, [campo]: valor } }));
 
+  async function adicionarFotos(lista: FileList | null) {
+    if (!lista || !lista.length) return;
+    const arquivos = Array.from(lista);
+    const novas: FotoUI[] = arquivos.map((file) => ({
+      tempId: crypto.randomUUID(),
+      path: "",
+      url: URL.createObjectURL(file),
+      enviando: true,
+    }));
+    setFotos((atual) => [...atual, ...novas]);
+
+    const supabase = clienteNavegador();
+    await Promise.all(
+      arquivos.map(async (file, i) => {
+        const tempId = novas[i].tempId;
+        const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+        const path = `${d.obra_id}/${d.id}/foto-${crypto.randomUUID()}.${ext}`;
+        const { error } = await supabase.storage
+          .from("diario-anexos")
+          .upload(path, file, { contentType: file.type || "image/jpeg" });
+        setFotos((atual) =>
+          atual.map((f) =>
+            f.tempId === tempId
+              ? { ...f, path: error ? "" : path, enviando: false, erro: !!error }
+              : f
+          )
+        );
+      })
+    );
+  }
+
+  async function removerFoto(tempId: string) {
+    const alvo = fotos.find((f) => f.tempId === tempId);
+    setFotos((atual) => atual.filter((f) => f.tempId !== tempId));
+    if (alvo?.path) {
+      await clienteNavegador().storage.from("diario-anexos").remove([alvo.path]);
+    }
+  }
+
+  async function assinaturaPara(
+    pad: React.RefObject<AssinaturaPadHandle | null>,
+    atual: string | null,
+    nomeArquivo: string
+  ): Promise<string | null> {
+    const handle = pad.current;
+    if (!handle) return atual;
+    if (handle.foiLimpo()) return null;
+    if (!handle.foiAlterado()) return atual;
+    const blob = await handle.paraBlob();
+    if (!blob) return atual;
+    const path = `${d.obra_id}/${d.id}/${nomeArquivo}.png`;
+    const { error } = await clienteNavegador()
+      .storage.from("diario-anexos")
+      .upload(path, blob, { contentType: "image/png", upsert: true });
+    return error ? atual : path;
+  }
+
   const salvar = () =>
     iniciar(async () => {
       setErro(null);
-      const r = await salvarDiario({ ...d, id: idExistente });
+
+      const [ass_rt_img, ass_enc_img, ass_cont_img] = await Promise.all([
+        assinaturaPara(padRT, d.ass_rt_img, "assinatura-rt"),
+        assinaturaPara(padEnc, d.ass_enc_img, "assinatura-enc"),
+        assinaturaPara(padCont, d.ass_cont_img, "assinatura-cont"),
+      ]);
+
+      const r = await salvarDiario({
+        ...d,
+        novo,
+        fotos: fotos.filter((f) => f.path).map((f) => ({ path: f.path })),
+        ass_rt_img,
+        ass_enc_img,
+        ass_cont_img,
+      });
       if (r?.erro) setErro(r.erro);
       else if (r?.id) router.push(`/diarios/${r.id}`);
     });
@@ -325,19 +414,52 @@ export default function DiarioForm({ obras, inicial, idExistente }: Props) {
 
       {/* 7 — fotos */}
       <Bloco n="7" titulo="Registro fotográfico" hint="anexo">
-        <div className="fields">
-          <div className="f f-4">
-            <label htmlFor="fq">Nº de fotos anexas</label>
-            <input
-              id="fq"
-              type="number"
-              min="0"
-              inputMode="numeric"
-              value={d.fotos_qtd}
-              onChange={(e) => set("fotos_qtd", e.target.value)}
-            />
+        {fotos.length ? (
+          <div className="fotos-grid">
+            {fotos.map((f) => (
+              <div className="foto-item" key={f.tempId}>
+                <img src={f.url} alt="" />
+                {f.enviando ? <span className="foto-carregando">enviando…</span> : null}
+                <button
+                  type="button"
+                  className="foto-rmv"
+                  aria-label="remover foto"
+                  onClick={() => removerFoto(f.tempId)}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
           </div>
-          <div className="f f-8">
+        ) : null}
+        <div className="foto-pickers">
+          <label className="btn sm">
+            Tirar foto
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={(e) => {
+                adicionarFotos(e.target.files);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          <label className="btn sm">
+            Enviar fotos
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(e) => {
+                adicionarFotos(e.target.files);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        </div>
+        <div className="fields" style={{ marginTop: 12 }}>
+          <div className="f">
             <label htmlFor="fa">Assunto das fotos</label>
             <input
               id="fa"
@@ -350,34 +472,52 @@ export default function DiarioForm({ obras, inicial, idExistente }: Props) {
       </Bloco>
 
       {/* 8 — assinaturas */}
-      <Bloco n="8" titulo="Assinaturas" hint="nomes impressos na folha">
+      <Bloco n="8" titulo="Assinaturas" hint="desenhe com o dedo ou o mouse">
         <div className="fields">
           <div className="f f-4">
-            <label htmlFor="a1">Responsável técnico</label>
-            <input
-              id="a1"
-              type="text"
-              value={d.ass_rt}
-              onChange={(e) => set("ass_rt", e.target.value)}
-            />
+            <label>Responsável técnico</label>
+            <AssinaturaPad ref={padRT} imagemInicial={assinaturasUrls.rt} />
+            <div className="sig-bar">
+              <input
+                type="text"
+                placeholder="nome impresso"
+                value={d.ass_rt}
+                onChange={(e) => set("ass_rt", e.target.value)}
+              />
+              <button type="button" className="rmv" onClick={() => padRT.current?.limpar()}>
+                limpar
+              </button>
+            </div>
           </div>
           <div className="f f-4">
-            <label htmlFor="a2">Encarregado / preposto</label>
-            <input
-              id="a2"
-              type="text"
-              value={d.ass_enc}
-              onChange={(e) => set("ass_enc", e.target.value)}
-            />
+            <label>Encarregado / preposto</label>
+            <AssinaturaPad ref={padEnc} imagemInicial={assinaturasUrls.enc} />
+            <div className="sig-bar">
+              <input
+                type="text"
+                placeholder="nome impresso"
+                value={d.ass_enc}
+                onChange={(e) => set("ass_enc", e.target.value)}
+              />
+              <button type="button" className="rmv" onClick={() => padEnc.current?.limpar()}>
+                limpar
+              </button>
+            </div>
           </div>
           <div className="f f-4">
-            <label htmlFor="a3">Contratante ou fiscal</label>
-            <input
-              id="a3"
-              type="text"
-              value={d.ass_cont}
-              onChange={(e) => set("ass_cont", e.target.value)}
-            />
+            <label>Contratante ou fiscal</label>
+            <AssinaturaPad ref={padCont} imagemInicial={assinaturasUrls.cont} />
+            <div className="sig-bar">
+              <input
+                type="text"
+                placeholder="nome impresso"
+                value={d.ass_cont}
+                onChange={(e) => set("ass_cont", e.target.value)}
+              />
+              <button type="button" className="rmv" onClick={() => padCont.current?.limpar()}>
+                limpar
+              </button>
+            </div>
           </div>
         </div>
       </Bloco>
@@ -385,7 +525,7 @@ export default function DiarioForm({ obras, inicial, idExistente }: Props) {
       <div className="savebar noprint">
         <div className="savebar-in">
           <button className="btn primary" type="button" onClick={salvar} disabled={pendente}>
-            {pendente ? "Salvando…" : idExistente ? "Salvar alterações" : "Salvar diário"}
+            {pendente ? "Salvando…" : novo ? "Salvar diário" : "Salvar alterações"}
           </button>
           <span className="grow" />
           {erro ? <span className="msg err">{erro}</span> : null}

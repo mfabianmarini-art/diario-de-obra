@@ -101,9 +101,13 @@ create table if not exists public.diarios (
   ocorrencias    text not null default '',
   fotos_qtd      text not null default '',
   fotos_assunto  text not null default '',
+  fotos          jsonb not null default '[]'::jsonb,
   ass_rt         text not null default '',
   ass_enc        text not null default '',
   ass_cont       text not null default '',
+  ass_rt_img     text,
+  ass_enc_img    text,
+  ass_cont_img   text,
   autor_id       uuid not null references auth.users (id) on delete restrict,
   criado_em      timestamptz not null default now(),
   atualizado_em  timestamptz not null default now(),
@@ -111,6 +115,11 @@ create table if not exists public.diarios (
 );
 
 create index if not exists diarios_obra_data_idx on public.diarios (obra_id, data desc);
+
+alter table public.diarios add column if not exists fotos jsonb not null default '[]'::jsonb;
+alter table public.diarios add column if not exists ass_rt_img text;
+alter table public.diarios add column if not exists ass_enc_img text;
+alter table public.diarios add column if not exists ass_cont_img text;
 
 create or replace function public.toca_atualizado_em()
 returns trigger language plpgsql as $$
@@ -228,6 +237,46 @@ create policy diarios_atualiza on public.diarios
 drop policy if exists diarios_apaga on public.diarios;
 create policy diarios_apaga on public.diarios
   for delete using (public.gerencia_a_obra(obra_id) or autor_id = auth.uid());
+
+-- =====================================================================
+--  Anexos (fotos e assinaturas) — bucket privado, um por obra/diário
+-- =====================================================================
+-- caminho dos arquivos: <obra_id>/<diario_id>/arquivo — a RLS usa o
+-- primeiro segmento do caminho para saber a qual obra o arquivo pertence.
+insert into storage.buckets (id, name, public)
+values ('diario-anexos', 'diario-anexos', false)
+on conflict (id) do nothing;
+
+drop policy if exists anexos_leitura on storage.objects;
+create policy anexos_leitura on storage.objects
+  for select using (
+    bucket_id = 'diario-anexos'
+    and public.participa_da_obra(((storage.foldername(name))[1])::uuid)
+  );
+
+drop policy if exists anexos_insere on storage.objects;
+create policy anexos_insere on storage.objects
+  for insert with check (
+    bucket_id = 'diario-anexos'
+    and public.participa_da_obra(((storage.foldername(name))[1])::uuid)
+  );
+
+drop policy if exists anexos_atualiza on storage.objects;
+create policy anexos_atualiza on storage.objects
+  for update using (
+    bucket_id = 'diario-anexos'
+    and public.participa_da_obra(((storage.foldername(name))[1])::uuid)
+  );
+
+drop policy if exists anexos_apaga on storage.objects;
+create policy anexos_apaga on storage.objects
+  for delete using (
+    bucket_id = 'diario-anexos'
+    and (
+      public.gerencia_a_obra(((storage.foldername(name))[1])::uuid)
+      or owner = auth.uid()
+    )
+  );
 
 -- =====================================================================
 --  Funções de aplicação
