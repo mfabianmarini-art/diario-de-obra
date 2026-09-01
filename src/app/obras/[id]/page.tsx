@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import TopBar from "@/components/TopBar";
 import { clienteServidor, usuarioAtual } from "@/lib/supabase/server";
+import { amanha } from "@/lib/tipos";
 import { adicionarMembro, excluirObra, removerMembro, salvarObra } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -12,15 +13,21 @@ const AVISOS: Record<string, string> = {
   erro: "Não foi possível adicionar — só o gestor da obra pode fazer isso.",
 };
 
+const AVISOS_OBRA: Record<string, string> = {
+  ok: "Dados da obra salvos.",
+  erro: "Não foi possível salvar — só o gestor da obra pode editar o cabeçalho.",
+  erro_prazo: "O prazo precisa ser uma data futura.",
+};
+
 export default async function PaginaObra({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ membro?: string }>;
+  searchParams: Promise<{ membro?: string; obra?: string }>;
 }) {
   const { id } = await params;
-  const { membro } = await searchParams;
+  const { membro, obra: avisoObra } = await searchParams;
   const usuario = await usuarioAtual();
   const supabase = await clienteServidor();
 
@@ -43,6 +50,9 @@ export default async function PaginaObra({
         </div>
 
         {membro && AVISOS[membro] ? <p className="aviso">{AVISOS[membro]}</p> : null}
+        {avisoObra && AVISOS_OBRA[avisoObra] ? (
+          <p className={`aviso${avisoObra === "ok" ? " ok" : ""}`}>{AVISOS_OBRA[avisoObra]}</p>
+        ) : null}
 
         <form action={salvarObra}>
           <input type="hidden" name="id" value={obra.id} />
@@ -57,7 +67,16 @@ export default async function PaginaObra({
                 <Campo n="nome" r="Obra / empreendimento" v={obra.nome} c="f-8" />
                 <Campo n="art" r="ART / RRT nº" v={obra.art} c="f-4" />
                 <Campo n="endereco" r="Endereço" v={obra.endereco} c="f-8" />
-                <Campo n="prazo" r="Prazo" v={obra.prazo} c="f-4" />
+                <div className="f f-4">
+                  <label htmlFor="prazo">Prazo (término previsto)</label>
+                  <input
+                    id="prazo"
+                    name="prazo"
+                    type="date"
+                    min={amanha()}
+                    defaultValue={obra.prazo || ""}
+                  />
+                </div>
                 <Campo n="contratante" r="Contratante / proprietário" v={obra.contratante} c="f-6" />
                 <Campo n="executante" r="Executante" v={obra.executante} c="f-6" />
                 <Campo n="rt" r="Responsável técnico" v={obra.rt} c="f-4" />

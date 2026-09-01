@@ -38,7 +38,7 @@ export default function Folha({ diario, obra }: { diario: Diario; obra: Obra }) 
           <Campo r="Obra / empreendimento" v={obra.nome} c="c8" />
           <Campo r="ART / RRT nº" v={obra.art} c="c4" />
           <Campo r="Endereço" v={obra.endereco} c="c8" />
-          <Campo r="Início / prazo" v={[dataBr(obra.inicio), obra.prazo].filter(Boolean).join(" · ")} c="c4" />
+          <Campo r="Início / prazo" v={[dataBr(obra.inicio), dataBr(obra.prazo)].filter(Boolean).join(" · ")} c="c4" />
           <Campo r="Contratante / proprietário" v={obra.contratante} c="c6" />
           <Campo r="Executante" v={obra.executante} c="c6" />
           <Campo r="Responsável técnico" v={obra.rt} c="c8" />

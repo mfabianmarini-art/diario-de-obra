@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { clienteServidor } from "@/lib/supabase/server";
+import { hoje } from "@/lib/tipos";
 
 export async function criarObra(dados: FormData) {
   const nome = String(dados.get("nome") || "").trim() || "Obra sem nome";
@@ -15,8 +16,14 @@ export async function criarObra(dados: FormData) {
 
 export async function salvarObra(dados: FormData) {
   const id = String(dados.get("id") || "");
+  const prazo = String(dados.get("prazo") || "") || null;
+
+  if (prazo && prazo < hoje()) {
+    redirect(`/obras/${id}?obra=erro_prazo`);
+  }
+
   const supabase = await clienteServidor();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("obras")
     .update({
       nome: String(dados.get("nome") || "").trim() || "Obra sem nome",
@@ -27,14 +34,19 @@ export async function salvarObra(dados: FormData) {
       crea: String(dados.get("crea") || ""),
       art: String(dados.get("art") || ""),
       inicio: String(dados.get("inicio") || "") || null,
-      prazo: String(dados.get("prazo") || ""),
+      prazo,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
 
   if (error) throw new Error("Não foi possível salvar a obra: " + error.message);
+
   revalidatePath("/obras");
   revalidatePath(`/obras/${id}`);
-  redirect("/obras?ok=1");
+
+  if (!data) redirect(`/obras/${id}?obra=erro`);
+  redirect(`/obras/${id}?obra=ok`);
 }
 
 export async function excluirObra(dados: FormData) {

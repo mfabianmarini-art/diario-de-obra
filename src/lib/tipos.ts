@@ -58,6 +58,16 @@ export function hoje(): string {
   ].join("-");
 }
 
+export function amanha(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return [
+    d.getFullYear(),
+    String(d.getMonth() + 1).padStart(2, "0"),
+    String(d.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
 export function dataBr(iso: string | null | undefined): string {
   if (!iso) return "";
   const [a, m, d] = iso.slice(0, 10).split("-");
