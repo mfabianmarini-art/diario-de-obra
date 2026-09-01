@@ -37,12 +37,20 @@ export default async function PaginaObra({
   const { data: obra } = await supabase.from("obras").select("*").eq("id", id).maybeSingle();
   if (!obra) notFound();
 
-  const { data: membros } = await supabase
+  const { data: membrosBrutos } = await supabase
     .from("obra_membros")
-    .select("user_id, papel, perfis:user_id (nome, admin)")
+    .select("user_id, papel")
     .eq("obra_id", id);
 
-  const souGestor = membros?.some((m) => m.user_id === usuario?.id && m.papel === "gestor");
+  const idsMembros = (membrosBrutos || []).map((m) => m.user_id);
+  const { data: perfis } = idsMembros.length
+    ? await supabase.from("perfis").select("id, nome, admin").in("id", idsMembros)
+    : { data: [] as { id: string; nome: string; admin: boolean }[] };
+
+  const perfisPorId = new Map((perfis || []).map((p) => [p.id, p]));
+  const membros = (membrosBrutos || []).map((m) => ({ ...m, perfil: perfisPorId.get(m.user_id) }));
+
+  const souGestor = membros.some((m) => m.user_id === usuario?.id && m.papel === "gestor");
 
   return (
     <>
@@ -105,8 +113,8 @@ export default async function PaginaObra({
           </div>
           <div className="blk-b">
             <div className="rows">
-              {membros?.map((m) => {
-                const perfil = m.perfis as unknown as { nome?: string; admin?: boolean } | null;
+              {membros.map((m) => {
+                const perfil = m.perfil;
                 const ehGestorPadrao = !!perfil?.admin;
                 const podeGerenciar = souGestor && m.user_id !== usuario?.id && !ehGestorPadrao;
                 return (
